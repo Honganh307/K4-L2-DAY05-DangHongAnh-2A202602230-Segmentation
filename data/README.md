@@ -1,38 +1,7 @@
-# Dữ liệu Ngày 5
+# Dữ liệu bài Day 5
 
-Ảnh + ground truth theo từng task. Ground truth trong `groundtruth/` dùng để **tự chấm**; đừng nộp thay bài.
+Bộ này sao chép nguyên **3 ảnh Easy, 3 ảnh Medium, 2 ảnh Hard và 6 ảnh checkpoint**, cùng các `classes.json` và `manifest.json`, từ [starter Day 5](https://github.com/VinUni-AI20k/Day5-Segmentation-Data-Student) commit `3bff13d`. Không dùng bộ 5 ảnh thử nghiệm làm bài chấm.
 
-## Nguồn
+Starter ghi nguồn ảnh là BDD100K cho semantic và COCO val2017/COCO Panoptic cho instance, panoptic; xem tài liệu nguồn trong starter để kiểm điều kiện sử dụng. Chỉ dùng trong phạm vi khóa học đã được người phụ trách cho phép. `groundtruth/` không có trong repo học viên. Không tải script tạo lại dữ liệu, đáp án hoặc cache nhãn lên bài nộp.
 
-- **Instance (Medium, một số checkpoint):** COCO val2017 (Creative Commons; ảnh Flickr). Nhãn mask thể hiện (instance)
-  lấy từ `instances_val2017.json`. Chỉ giữ 6 lớp phương tiện/người của bài.
-- **Semantic (Easy, cp3/cp4/cp6):** BDD100K semantic segmentation (bản tái xuất Kaggle
-  `pawakapan/bdd100ksegw`), nhãn theo trainId chuẩn Cityscapes. Ground truth là ảnh trainId, chỉ giữ các lớp của task
-  (pixel lớp khác = 255 ignore, không tính điểm).
-
-- **Panoptic (Hard, hard_panoptic):** COCO Panoptic val2017 — ground truth per-instance thật (mỗi vật một segment id + lớp stuff/things), chấm bằng PQ chuẩn COCO. Tên lớp COCO (`pavement-merged`…) đổi sang tên thân thiện (`sidewalk`…) trong `classes.json`.
-
-Ảnh của bài **khác** với bộ minh hoạ của giảng viên (`day5-segmentation-demo`) để tránh trùng.
-
-## Cấu trúc
-
-```
-data/
-  manifest.json              mô tả mọi task (loại, trọng số, đường dẫn)
-  tiers/<cấp>/               images/ + groundtruth/ + classes.json  (3 cấp = 82đ)
-  checkpoints/<trạm>/        images/ + groundtruth/ + classes.json  (6 trạm = 18đ)
-```
-
-Ba cấp + sáu checkpoint = **100 điểm**. Không còn bộ graded riêng.
-
-## Tạo lại dữ liệu
-
-```bash
-~/miniconda3/envs/ai-lab/bin/python scripts/prepare_data.py
-```
-Cần `KAGGLE_API_TOKEN` trong `../cvat/.env` (tải BDD) và cache COCO của `day5-segmentation-demo`.
-
-## Ground truth giữ kín
-
-`data/tiers/**/groundtruth/` và `data/checkpoints/**/groundtruth/` bị `.gitignore` loại khỏi kho học viên —
-đáp án do người hướng dẫn giữ. Học viên gán nhãn và nộp export; người hướng dẫn chạy bộ chấm trên máy có ground truth.
+Mỗi task có `images/`, `classes.json` và `cvat-labels.json` riêng. `classes.json` là metadata gốc cho tên class/chấm bài, **không dán vào ô Raw của CVAT**. Muốn tạo labels nhanh, mở `cvat-labels.json` cùng task, sao chép toàn bộ mảng JSON và dán vào **Labels → Raw** trước khi tạo task; hoặc dùng Constructor để thêm từng tên trong `classes.json`. File `cvat-labels.json` được tạo từ `classes.json` bằng `scripts/convert_label_cvat.py`; học viên không cần chạy script này. File `manifest.json` quy định task, loại và trọng số.
