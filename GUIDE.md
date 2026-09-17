@@ -1,98 +1,37 @@
-# Hướng dẫn từng bước — Ngày 5 Segmentation
+# Lộ trình Day 5 — 240 phút
 
-## 0. Chuẩn bị
+Đọc [lab-guide.html](lab-guide.html) nếu bạn cần ảnh minh họa CVAT từng bước. Tên lớp và quy tắc trong [guideline-mini-sheet.md](guideline-mini-sheet.md) áp dụng cho tất cả; file `classes.json` của mỗi task quyết định tên lớp chính xác.
 
-- CVAT mở được ở `http://localhost:8080` (xem `CVAT_SETUP.md`).
-- Cài bộ chấm: `~/miniconda3/envs/ai-lab/bin/python -m pip install -r requirements.txt`.
-- Đọc `guideline-mini-sheet.md` — định nghĩa lớp và quy tắc cho từng loại phân vùng.
-- Ảnh đã có sẵn trong `data/tiers/<cấp>/images/` và `data/checkpoints/<trạm>/images/`.
-  Ground truth (`groundtruth/`) do người hướng dẫn giữ (bị `.gitignore`); học viên nộp export, người hướng dẫn chấm.
+| Phút | Việc cần làm | Bằng chứng giữ lại |
+| ---: | --- | --- |
+| 0–15 | Mở CVAT, đọc quy tắc, tạo task Easy | Nhìn đủ 3 ảnh và đúng 5 lớp |
+| 15–45 | Easy semantic: tô vùng, tự QC, Save và export | `easy_semantic.zip` |
+| 45–110 | Medium instance: từng vật một mask; object đầu tự vẽ trước gợi ý | `medium_instance.zip`; một quyết định trong REPORT |
+| 110–120 | Nghỉ | Giữ hai ZIP an toàn |
+| 120–175 | Hard panoptic: stuff + từng thing, tự QC và export | `hard_panoptic.zip` |
+| 175–185 | Nghỉ; ground truth ba tier được phát từ phút 180 theo hướng dẫn lớp | Chưa đưa đáp án vào fork |
+| 185–215 | Sáu checkpoint; người xong sớm có thể chạy scorer ba tier | ZIP trạm đã làm; kết quả tự đánh giá nếu có |
+| 215–235 | Kiểm export, ghi lỗi, hành động sửa và ba ca chưa chắc vào report | `REPORT.md` |
+| 235–240 | Save lần cuối, kiểm ZIP và report, ghi lỗi cần báo coach | Bài sẵn để push lên fork |
 
-> Quan trọng: **tên lớp phải đúng từng chữ** như trong `classes.json` của mỗi task
-> (`road`, `sidewalk`, `car`…). Bộ chấm ghép nhãn theo tên; sai tên = lớp đó không được tính.
+Các mốc là **timebox thực hành**, không phải hạn nộp ngay trong lớp hay lý do bỏ qua Save/QC. Fork repo đề bài public, push `REPORT.md` và các ZIP đã làm lên fork của bạn, rồi nộp **link fork trên VLearn trong vòng 24 giờ sau buổi lab**. Công cụ chấm riêng chạy sau cửa sổ nộp. Nếu không đủ giờ, ghi phần đã hoàn thành và phần còn thiếu trung thực; không có bài tập về nhà bắt buộc. Bonus giờ cuối có hai mức 10/20 theo [rubric](RUBRIC.md), điểm ghi nhận vẫn tối đa 100.
 
-## 1. Easy — Semantic (20 điểm)
+## Easy: semantic — 20 điểm
 
-Ảnh: `data/tiers/easy_semantic/images` (3 ảnh BDD). Lớp: `road, sidewalk, building, vegetation, sky`.
+Ba ảnh ở `data/tiers/easy_semantic/images/`. Semantic hỏi “pixel thuộc loại vùng nào?”; lớp là `road`, `sidewalk`, `building`, `vegetation`, `sky`. Dùng Brush/Polygon để phủ vùng nhìn thấy, đặc biệt kiểm ranh `road`–`sidewalk`. Không gộp hai lớp chỉ vì màu ảnh gần giống. Save và export **Segmentation mask 1.1**.
 
-1. Tạo project CVAT, thêm đúng 5 lớp trên (kiểu **mask** hoặc **any**).
-2. Tạo task, tải 3 ảnh.
-3. Tô kín từng vùng bằng **Brush** (hoặc Polygon). Vẽ **từ xa đến gần**; bật **Remove underlying pixels**
-   để biên chung chỉ vẽ một lần.
-4. Chú ý **bó vỉa (curb)**: `road` và `sidewalk` cùng màu nhựa nhưng khác chức năng — ranh giới là chỗ đường kết thúc.
-5. **Save**. Menu → **Export job dataset → Segmentation mask 1.1**.
-6. Chấm:
-   ```bash
-   ~/miniconda3/envs/ai-lab/bin/python scoring/score.py easy_semantic <export.zip>
-   ```
-   Xem `per-class IoU`. Lớp nào thấp → quay lại sửa, xuất lại, chấm lại.
+## Medium: instance — 32 điểm
 
-## 2. Medium — Instance (32 điểm)
+Ba ảnh ở `data/tiers/medium_instance/images/`; lấy sáu tên lớp từ `classes.json`. Mỗi vật đếm được là một mask riêng. Trước khi dùng gợi ý tự động, tự vẽ **một object** rồi ghi ảnh, vị trí, class, quy tắc biên trong report. Nếu dùng gợi ý sau đó, ghi một lỗi hoặc lý do giữ đề xuất. Không có gợi ý vẫn làm bình thường bằng Brush/Polygon. Kiểm vật thiếu/thừa, gộp/tách nhầm, biên ăn nền rồi export **COCO 1.0**.
 
-Ảnh: `data/tiers/medium_instance/images` (3 ảnh COCO). Lớp: `person, bicycle, car, motorcycle, bus, truck`.
+## Hard: panoptic — 30 điểm
 
-1. Mỗi vật đếm được = **một** mask riêng (đừng gộp).
-2. Dùng **Polygon**, **Brush**, hoặc **AI Tools → Segment Anything** (click + / click −) rồi sửa.
-3. Ca khó: hai xe sát nhau bị SAM gộp một mask → **Slice (Alt+J)**. Vật bị cột đèn cắt đôi → vẫn **một** mask (Join J).
-   Kính/lỗ thủng → **không** khoét.
-4. Xuất **COCO 1.0** (kèm ảnh không bắt buộc cho chấm).
-5. Chấm: `scoring/score.py medium_instance <export.zip>`. Xem `mean matched IoU`, `recall`, `count_error`.
-   - `recall` thấp = bỏ sót vật. `precision` thấp = vẽ thừa. `count_error` = lệch số lượng.
+Hai ảnh ở `data/tiers/hard_panoptic/images/`. Panoptic cần cả **stuff** (`road`, `sky`…) và từng **thing** (`car #1`, `car #2`…). Dùng đúng 12 lớp trong `classes.json`. Vẽ từ xa tới gần, kiểm chồng lấn và vùng chưa phủ. Pixel không thể quyết định thì ghi ca mơ hồ; đừng bịa class. Save và export **COCO 1.0**. Định dạng này là hợp đồng của starter; nếu CVAT lớp không giữ mask đúng khi export, báo coach thay vì sửa ZIP bằng tay.
 
-## 3. Hard — Panoptic (30 điểm, chấm bằng PQ thật)
+## Sáu checkpoint — 18 điểm
 
-Ảnh: `data/tiers/hard_panoptic/images` (2 ảnh COCO đường phố). Lớp: 12 lớp (xem `classes.json`) —
-stuff `road, sidewalk, building, vegetation, sky` + things `person, car, bus, truck, motorcycle, bicycle, traffic light`.
+Mỗi checkpoint là một ảnh và **3 điểm**: `cp1_holes` (lỗ/kính), `cp2_slice` (hai vật sát nhau), `cp5_occlusion` (vật bị che), `cp3_thin` (nét mảnh), `cp4_curb` (bó vỉa), `cp6_coverage` (phủ vùng). Mở `classes.json` riêng của mỗi trạm; đừng dùng class list của task khác. Task instance export COCO 1.0; task semantic export Segmentation mask 1.1.
 
-Panoptic = **mọi pixel đúng một nhãn** VÀ **things phải tách từng instance**.
+## Tự QC rồi nộp
 
-1. Tô cả stuff (một mask cho mỗi vùng) lẫn things (mỗi vật **một** mask riêng). Dùng brush/polygon/SAM.
-2. Vẽ từ xa đến gần; z-order `[` `]` + Remove underlying pixels để **không** hai mask chồng một pixel.
-3. Pixel không quyết được → để trống (giảm điểm phần đó), đừng đoán bừa.
-4. Xuất **COCO 1.0** (mỗi mask là một đối tượng; stuff cũng là mask). Chấm:
-   `scoring/score.py hard_panoptic <export.zip>`.
-   Đọc **PQ** (điểm chính), **SQ** (mask khít cỡ nào) và **RQ** (nhận đúng bao nhiêu vật). PQ khắt khe hơn IoU:
-   phải khớp IoU > 0.5 mới tính là nhận đúng, và bị trừ cho vật thừa/thiếu. PQ ~0.6–0.65 đã là mức tốt.
-
-> Panoptic dùng ground truth **COCO Panoptic** thật (mỗi vật một segment id). PQ tính theo định nghĩa chuẩn (Kirillov 2019: PQ = SQ × RQ, khớp IoU > 0.5); phần xử lý pixel VOID được đơn giản hoá nên có thể lệch nhẹ so với script COCO gốc.
-
-## 4. Checkpoint — trạm ca đặc biệt (mỗi trạm 3 điểm)
-
-Mỗi trạm là **một ảnh**, luyện đúng một lỗi. Đọc `brief` in ra khi chấm.
-
-| Trạm | Loại | Luyện |
-| --- | --- | --- |
-| `cp1_holes` | instance | lỗ thủng: không khoét kính/khe |
-| `cp2_slice` | instance | tách xe sát nhau thành từng instance |
-| `cp5_occlusion` | instance | vật bị che vẫn một mask; đếm đúng |
-| `cp3_thin` | semantic | nét mảnh: cột/biển, brush 2–3px |
-| `cp4_curb` | semantic | ranh giới road/sidewalk |
-| `cp6_coverage` | semantic | phủ kín, không sót pixel (xem coverage %) |
-
-Chấm: `scoring/score.py cp1_holes <export.zip>` (tương tự cho các trạm khác).
-
-## Chọn đúng thư mục dữ liệu (tiers / checkpoints)
-
-Hai nhóm dữ liệu nằm ở `data/tiers` và `data/checkpoints`. `score.py` tự tìm
-đúng thư mục theo `task_name` (trong `manifest.json`). Thêm hai tiện ích:
-
-- `scoring/score.py --list` — liệt kê mọi task theo từng nhóm (type + weight).
-- `scoring/score.py <task> <export.zip> --group tiers|checkpoints` — giới hạn theo
-  nhóm; báo lỗi nếu task không thuộc nhóm đó.
-
-Nếu ảnh trong bài nộp **không khớp** ground truth của task đã chọn, `score.py` **dừng và báo
-lỗi** (thay vì chấm 0 âm thầm), kèm gợi ý task nào chứa đúng ảnh đó — tránh chọn nhầm thư mục.
-
-## 5. Gộp điểm và báo cáo
-
-1. Đặt mỗi export vào `submissions/<task_name>.zip` (ví dụ `submissions/easy_semantic.zip`).
-2. Chạy `~/miniconda3/envs/ai-lab/bin/python scoring/scorecard.py`.
-3. Xem `reports/SCORECARD.md` (một tổng /100 gồm 3 cấp + 6 checkpoint, kèm cờ chống gian lận).
-4. Viết `REPORT.md` (mẫu ở `reports/REPORT_TEMPLATE.md`): cấp nào bạn làm, điểm, lớp/vật sai và **cách sửa dựa
-   trên minh chứng**. Đừng chỉ báo con số — nối nó với một quy tắc.
-
-## 6. Mẹo dùng SAM cho nhanh (không bắt buộc)
-
-AI Tools → Interactors → **Segment Anything**. Click trái = điểm cộng, click phải = điểm trừ, **giữ Ctrl** trước
-khi click. SAM tô, **bạn** đặt tên lớp và sửa lỗi máy (tràn biên, gộp hai vật, ăn bóng). Lần click đầu trên một ảnh
-mất ~10–30s (chạy CPU), các click sau tức thì.
+Theo thứ tự: đúng ảnh → đúng loại segmentation → đúng tên lớp → đủ số object/vùng → biên → Save → ZIP đúng format. Một lỗi thực tế và cách sửa phải xuất hiện trong `REPORT.md`. Trên fork, bật **Actions** một lần; khi upload ZIP vào `submissions/` và Commit, **Day 5 self-check** tự kiểm cấu trúc. Sau khi ground truth ba tier được công bố qua release chính thức, action tự hiện điểm phản hồi **/82** trong Summary; bạn có thể sửa/export/push lại để xem điểm mới. [Hướng dẫn từng nút và cách chạy script trên máy nếu cần](docs/SELF_SCORING.md). [Notebook Colab](notebooks/README.md) vẫn là tùy chọn; action không tự chứng nhận PASS hoặc top 3.

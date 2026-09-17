@@ -16,7 +16,7 @@ each task's path prefix. Before scoring, the tool checks that the submission's i
 match the chosen task's ground truth and errors (instead of silently scoring 0) if they
 don't — pointing you at the task(s) that do match.
 
-Prints per-class / per-instance metrics, the tier points earned, and any anti-cheat flags.
+Prints per-class / per-instance metrics, points, and signals for human review.
 """
 import argparse
 import json
@@ -80,6 +80,29 @@ def _gt_stems(base, ttype):
     return {Path(im["file_name"]).stem for im in data["images"]}
 
 
+def require_reference(base, ttype):
+    """Refuse to score without the separately held reference for every task image."""
+    gt = base / "groundtruth"
+    expected = {p.stem for p in (base / "images").glob("*.jpg")}
+    if not expected:
+        raise ValueError(f"No task images found in {base / 'images'}")
+    reference_file = {"instance": "instances.json", "panoptic": "panoptic.json"}.get(ttype)
+    if reference_file and not (gt / reference_file).is_file():
+        raise ValueError(f"Protected reference missing: {gt / reference_file}. "
+                         "This learner repository cannot calculate a grade on its own.")
+    if ttype == "semantic" and not gt.is_dir():
+        raise ValueError(f"Protected reference missing: {gt}. "
+                         "This learner repository cannot calculate a grade on its own.")
+    stems = _gt_stems(base, ttype)
+    if stems != expected:
+        raise ValueError(f"Incomplete reference for {base.name}: expected {sorted(expected)}, "
+                         f"found {sorted(stems)}")
+    if ttype == "panoptic":
+        missing = [stem for stem in expected if not (gt / "png" / f"{stem}.png").is_file()]
+        if missing:
+            raise ValueError(f"Panoptic reference PNG missing for: {', '.join(sorted(missing))}")
+
+
 def _submission_stems(path, ttype):
     members = L._read_members(path)
     if ttype == "semantic":
@@ -92,8 +115,10 @@ def _submission_stems(path, ttype):
 def _guard_match(reg, task, base, ttype, submission):
     sub_stems = _submission_stems(submission, ttype)
     gt_stems = _gt_stems(base, ttype)
-    if not sub_stems or not gt_stems or (sub_stems & gt_stems):
-        return                                       # ok (or can't tell — let scoring proceed)
+    if not sub_stems:
+        raise ValueError(f"No submitted image masks found for task '{task}'")
+    if sub_stems & gt_stems:
+        return
     # zero overlap: find which task(s) this submission actually matches
     matches = []
     for name, info in reg.items():
@@ -132,7 +157,11 @@ def main():
     weight = info.get("weight", 0)
     gt_dir = base / "groundtruth"
 
-    _guard_match(reg, args.task, base, ttype, args.submission)
+    try:
+        require_reference(base, ttype)
+        _guard_match(reg, args.task, base, ttype, args.submission)
+    except (ValueError, FileNotFoundError) as exc:
+        ap.error(str(exc))
 
     cap, floor = L.HUMAN_CAP, L.FLOOR
     if ttype == "semantic":
@@ -182,16 +211,16 @@ def main():
     if info.get("edge"):
         print(f"edge case: {info['edge']}")
     if flags:
-        print("\n*** ANTI-CHEAT FLAGS (evaluator, review) ***")
+        print("\n*** REVIEW SIGNALS (not a misconduct verdict) ***")
         for f in flags:
             print("  ! " + f)
     else:
-        print("\nno anti-cheat flags.")
+        print("\nno review signals.")
 
     out = {"task": args.task, "type": ttype, "group": info["_group"],
            "points": points, "weight": weight,
            "result": {k: v for k, v in result.items() if not k.startswith("_")},
-           "cheat_flags": flags}
+           "review_flags": flags}
     if args.json_out:
         Path(args.json_out).write_text(json.dumps(out, indent=2))
         print(f"\nwrote {args.json_out}")

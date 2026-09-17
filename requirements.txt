@@ -1,7 +1,4 @@
-# Day-5 segmentation lab — scoring engine (install into conda env "ai-lab")
-pycocotools
-pillow
+# Optional scoring dependencies. Learners can annotate and submit without these.
 numpy
-requests
-python-dotenv
-# opencv-python  # only needed to regenerate/degrade masks in tests (ultralytics already provides it in ai-lab)
+pillow
+pycocotools

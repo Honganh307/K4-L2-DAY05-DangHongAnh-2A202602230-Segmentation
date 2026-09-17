@@ -1,15 +1,13 @@
 """Scoring engine for the Day-5 segmentation lab.
 
-Compares a student's CVAT export against golden ground truth and returns metrics,
-a tier score, and anti-cheat flags. Two task families:
+Compares a CVAT export against protected reference masks and returns metrics,
+task points, and signals for human review. Two task families:
 
   semantic             <- CVAT "Segmentation mask 1.1"  (color PNGs + labelmap.txt)
   instance / panoptic  <- CVAT "COCO 1.0"               (annotations/*.json)
 
-Design notes
-- Metric is capped at HUMAN_CAP (0.85): two good annotators only agree ~0.85-0.92
-  (Segment Anything §5), so 0.85 already earns full marks. Scores above CAP add
-  nothing and scores at/above SUSPECT (0.985) raise a possible-cheating flag.
+The caps and review thresholds are inherited from the starter rubric. They are
+not universal human-agreement bounds or evidence of learner misconduct.
 """
 from __future__ import annotations
 
@@ -22,12 +20,12 @@ import numpy as np
 from PIL import Image
 from pycocotools import mask as cocomask
 
-HUMAN_CAP = 0.85      # IoU/mIoU value that earns full tier points (human agreement)
-PQ_CAP = 0.65         # panoptic PQ is stricter; good human-vs-human PQ ~0.6-0.7
-FLOOR = 0.40          # below this earns ~0 (a rough box, not a mask)
-PQ_FLOOR = 0.20       # PQ floor (a rough attempt)
-SUSPECT = 0.985       # at/above this -> possible ground-truth reuse (IoU tasks)
-PQ_SUSPECT = 0.95     # near-perfect PQ is also implausible for human labeling
+HUMAN_CAP = 0.85      # starter cap for IoU-based points
+PQ_CAP = 0.65         # starter cap for panoptic PQ points
+FLOOR = 0.40          # starter floor for IoU-based points
+PQ_FLOOR = 0.20       # starter floor for panoptic PQ points
+SUSPECT = 0.985       # high-agreement review threshold, not a verdict
+PQ_SUSPECT = 0.95     # high-PQ review threshold, not a verdict
 
 # ---------------------------------------------------------------------------
 # zip helpers
@@ -330,7 +328,7 @@ def _accumulate_pq(pred_seg, pred_cats, gt_seg, gt_cats, class_names, per_class)
 
 
 def score_panoptic(pred_maps, gt_maps, class_names):
-    """Standard Panoptic Quality (Kirillov et al. 2019), aggregated over images.
+    """COCO-style Panoptic Quality aggregated over images, with simplified void handling.
 
     pred_maps / gt_maps: {image_stem: (seg HxW int32, {seg_id: class_name})}.
     PQ = sum(IoU of matched) / (TP + 0.5 FP + 0.5 FN), matched iff IoU > 0.5.
@@ -373,7 +371,7 @@ def build_pred_panoptic(sub_coco, class_names, stuff_names):
 
 
 # ---------------------------------------------------------------------------
-# score + anti-cheat
+# score + human-review signals
 # ---------------------------------------------------------------------------
 def metric_to_points(value, weight, cap=HUMAN_CAP, floor=FLOOR):
     frac = (min(value, cap) - floor) / (cap - floor)
@@ -382,17 +380,18 @@ def metric_to_points(value, weight, cap=HUMAN_CAP, floor=FLOOR):
 
 
 def cheat_flags(task_type, result):
+    """Legacy starter API: flag high agreement for review, never infer misconduct."""
     flags = []
     thr = PQ_SUSPECT if task_type == "panoptic" else SUSPECT
     if result["value"] >= thr:
-        flags.append(f"SUSPECT_PERFECT_MATCH: metric {result['value']:.3f} >= {thr} — "
-                     "real human labeling is never this perfect. Possible ground-truth reuse.")
+        flags.append(f"REVIEW_HIGH_AGREEMENT: metric {result['value']:.3f} >= {thr}; "
+                     "check reference version and export provenance manually.")
     if task_type == "instance":
         ni = result.get("_near_identical", 0); tp = result.get("tp", 0)
         if tp and ni / tp >= 0.9 and tp >= 3:
-            flags.append(f"SUSPECT_IDENTICAL_GEOMETRY: {ni}/{tp} masks pixel-identical to GT.")
+            flags.append(f"REVIEW_IDENTICAL_GEOMETRY: {ni}/{tp} masks pixel-identical to reference.")
     if task_type in ("semantic", "panoptic"):
         vals = [v for v in result.get("per_class_iou", {}).values() if v is not None]
         if vals and min(vals) >= SUSPECT:
-            flags.append("SUSPECT_ALL_CLASSES_PERFECT: every class IoU >= 0.985.")
+            flags.append("REVIEW_ALL_CLASSES_HIGH: every measured class IoU >= 0.985.")
     return flags

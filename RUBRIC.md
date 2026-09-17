@@ -1,76 +1,46 @@
-# Tiêu chí & cách tính điểm — Ngày 5
+# Rubric Day 5 — tối đa 100 điểm trong lớp
 
-Điểm đo **chất lượng nhãn so với ground truth**, không phải để xếp hạng con người. Mục tiêu là học kỹ năng, không
-phải chạy theo con số tuyệt đối.
+Trọng số giữ từ [starter Day 5](https://github.com/VinUni-AI20k/Day5-Segmentation-Data-Student) commit `3bff13d`; không có bài về nhà bắt buộc. Task chưa nộp được ghi là chưa có bằng chứng, không tự điền điểm giả. Học viên nộp link fork trên VLearn trong vòng 24 giờ sau buổi lab; công cụ chấm riêng chạy sau cửa sổ nộp. Bản nộp được xem cùng ảnh, class và quy tắc của task. Ground truth ba tier được phát **trong 60 phút cuối buổi lab** theo hướng dẫn lớp; đáp án checkpoint chỉ được dùng nếu người phụ trách cung cấp riêng.
 
-## Cách quy metric → điểm
+| Task | Loại | Điểm tối đa | Điều cần chứng minh |
+| --- | --- | ---: | --- |
+| `easy_semantic` | Semantic | 20 | Phủ đúng vùng và lớp, nhất là road/sidewalk |
+| `medium_instance` | Instance | 32 | Đủ vật, đúng class, từng vật một mask, biên theo phần nhìn thấy |
+| `hard_panoptic` | Panoptic | 30 | Stuff và things cùng đúng; things tách instance, ít vùng bỏ trống/chồng lấn |
+| Sáu checkpoint | Theo từng trạm | 6 × 3 = 18 | Xử lý lỗ, tách, nét mảnh, bó vỉa, che khuất, phủ vùng |
+| **Tổng** | | **100** | |
 
-Mỗi task có một metric trong `[0, 1]`:
+Metric của starter gồm mIoU/coverage cho semantic, matched IoU và recall cho instance, PQ cho panoptic. **Chỉ có thể tính điểm so reference khi người chấm có ground truth phù hợp.** IoU giữa hai bản nhãn hoặc với gợi ý máy chỉ là độ giống nhau, không phải correctness. Điểm, cờ bất thường hoặc tốc độ không tự chứng minh người học gian lận; khi cần coach xem lại cách áp dụng quy tắc và bằng chứng trước/sau sửa.
 
-- **Semantic:** `mIoU` (trung bình IoU theo lớp) + `coverage` (% pixel đã phủ).
-- **Instance:** `mean matched IoU × recall@0.5` — mask phải **vừa khít vừa đủ** (bỏ sót vật thì recall giảm).
-- **Panoptic:** `PQ` (Panoptic Quality chuẩn COCO) = SQ × RQ; khắt khe hơn IoU.
+## Bonus giờ cuối, vẫn tối đa 100
 
-Điểm của task (mốc "đầy đủ" khác nhau theo metric):
+Thông báo của người phụ trách có **hai mức bonus**: **10** khi chạy report và đáp ứng yêu cầu, **20** cho top 3 độ chính xác cao nhất. Để giữ trần 100 theo yêu cầu lớp, cách ghi nhận đề xuất là `điểm_cuối = min(100, điểm_core + mức_bonus_được_xác_nhận)`, với `mức_bonus` là **0, 10 hoặc 20** (lấy mức cao nhất, không cộng dồn 10 + 20). Ví dụ core 74, bonus 10 → 84; core 92, bonus 20 → 100. Bốn trọng số task ở bảng trên **không giảm và không đổi**. Phần điểm vượt trần không chuyển sang ngày khác.
 
-```
-frac  = clamp( (metric − FLOOR) / (CAP − FLOOR), 0, 1 )
-points = frac × trọng_số_task
-```
+Script `score.py` trả metric/điểm từng task và `scorecard.py --group tiers` gộp ba tier tối đa **82 điểm**; **không script nào in PASS, tính bonus, xếp top 3 hoặc kiểm tra ai vẽ trước giờ phát đáp án**. Người phụ trách cần công bố tiêu chí PASS cụ thể, cách xếp hạng/đồng hạng và bản export dùng để xét top 3. Để top 3 phản ánh chất lượng độc lập, nên chốt ZIP và thời điểm trước lúc phát ground truth; bài sửa sau khi xem reference dùng cho học và chấm theo quy định, không thể tự nhận là bài chưa xem đáp án. Chưa có xác nhận từ người phụ trách thì học viên **không tự cộng điểm bonus** vào `REPORT.md`.
 
-| metric | FLOOR | CAP (đầy đủ điểm) | cờ nghi vấn ≥ |
-| --- | ---: | ---: | ---: |
-| mIoU / matched-IoU | 0.40 | **0.85** (mức đồng thuận người–người, SAM §5) | 0.985 |
-| PQ (panoptic) | 0.20 | **0.65** (PQ khắt khe; người–người ~0.6–0.7) | 0.95 |
+[Hướng dẫn GitHub Actions tự đánh giá sau khi nhận reference](docs/SELF_SCORING.md) có đường xem Summary không cần Python, cùng lệnh dự phòng trên máy. Học viên có thể lặp lại lượt tự đánh giá; kết quả sau khi đáp án đã phát **không dùng làm bằng chứng độc lập để xếp top 3**. Người không chạy được Action vẫn làm/nộp bài cốt lõi; nếu muốn xét bonus do môi trường lỗi, báo coach ngay trong giờ lab. Ground truth đã phát **không được đưa vào fork công khai**. Cờ `SUSPECT` khi metric cao chỉ là tín hiệu xem lại, đặc biệt không đủ kết luận gì sau lúc đáp án đã được phát.
 
-- Đạt CAP là điểm đầy đủ; cố kéo cao hơn **không** thêm điểm.
-- Dưới FLOOR ≈ 0 điểm.
+## Cách đọc điểm kỹ thuật của starter
 
-| metric | mức | ý nghĩa |
+Khi reference đã được người chấm chuẩn bị và đối chiếu đúng ảnh/class, scorer gốc đổi metric thành điểm bằng `clamp((metric − floor)/(cap − floor), 0, 1) × trọng số`, làm tròn một chữ số. Đây là quy tắc chấm của starter, không phải lời hứa rằng tự kiểm ZIP sẽ cho điểm.
+
+| Loại | Metric dùng để chấm | Floor | Cap nhận đủ điểm |
+| --- | --- | ---: | ---: |
+| Semantic | mIoU theo class; coverage là tín hiệu QC kèm theo | 0.40 | 0.85 |
+| Instance | mean matched IoU × recall@0.5 | 0.40 | 0.85 |
+| Panoptic | PQ trên stuff và từng thing | 0.20 | 0.65 |
+
+Thiếu object làm recall giảm, thừa object ảnh hưởng precision và việc ghép; một mask khít không bù được những vật bỏ sót. Mask thiếu/khác ảnh hoặc sai class cần kiểm lại trên CVAT trước khi bàn về điểm. Coach xem cả file xuất và report cho những ca quy tắc mơ hồ; không suy diễn hành vi của học viên từ một ngưỡng hay cờ kỹ thuật.
+
+## Điều cần quan sát ở sáu checkpoint
+
+| Trạm | Bằng chứng đúng | Lỗi dễ gặp cần sửa |
 | --- | --- | --- |
-| < 0.50 | Chưa đạt | mask lệch nhiều, sai lớp, hoặc bỏ sót |
-| 0.50–0.70 | Cần bổ sung | đúng ý nhưng biên/òn thiếu |
-| 0.70–0.85 | Tốt | gần mức đồng thuận giữa người với người |
-| ≥ 0.85 | Đầy đủ | ngang mức con người; điểm tối đa |
-| ≥ 0.985 | **Cờ nghi vấn** | xem mục chống gian lận |
+| `cp1_holes` | Kính/khe nằm trong mask vật theo quy tắc task | Khoét lỗ tùy tiện khiến vật bị rỗng |
+| `cp2_slice` | Hai xe sát nhau vẫn là hai instance | Một mask gộp hai xe |
+| `cp5_occlusion` | Vật bị che vẫn được đếm là một instance | Tách thành hai object hoặc tự vẽ xuyên vùng bị che |
+| `cp3_thin` | Nét mảnh có class đúng, xem ở zoom lớn | Bỏ cột/biển hoặc brush quá dày |
+| `cp4_curb` | Ranh road–sidewalk theo chức năng/bó vỉa | Chọn theo màu nhựa đường |
+| `cp6_coverage` | Vùng nhìn thấy thuộc lớp cần có được phủ | Khe trống lớn hoặc tô bừa vùng không chắc |
 
-## Trọng số
-
-| Nhóm | Task | Trọng số |
-| --- | --- | ---: |
-| Cấp độ | easy_semantic | 20 |
-| | medium_instance | 32 |
-| | hard_panoptic | 30 |
-| Checkpoint | cp1…cp6 | mỗi trạm 3 (tổng 18) |
-| | **Tổng** | **100** |
-
-`scoring/scorecard.py` cộng tất cả (3 cấp + 6 checkpoint) thành **một tổng tối đa 100**. Làm hết = 100%.
-
-## Chống gian lận (in cho người chấm)
-
-Bộ chấm gắn cờ khi kết quả **không giống nhãn người thật**:
-
-- `SUSPECT_PERFECT_MATCH` — metric ≥ 0.985 (panoptic: PQ ≥ 0.95). Nhãn người không đạt mức này.
-- `SUSPECT_IDENTICAL_GEOMETRY` (instance) — ≥ 90% mask trùng khít từng pixel với ground truth.
-- `SUSPECT_ALL_CLASSES_PERFECT` (semantic) — mọi lớp IoU ≥ 0.985.
-
-Có cờ **không tự động là 0 điểm** — nó báo người chấm kiểm tra: học viên có nộp thẳng ground truth không, có sửa
-trực tiếp tệp xuất không. Ground truth (`groundtruth/`) do người hướng dẫn giữ, không phát trong kho học viên
-(`.gitignore`), nên học viên không thể chép đáp án.
-
-## Năng lực (định tính, đưa vào REPORT.md)
-
-| Năng lực | Minh chứng rõ | Chưa chứng minh |
-| --- | --- | --- |
-| Chọn đúng loại phân vùng | phân biệt semantic/instance/panoptic và dùng đúng | tô một mảng chung cho vật đếm được |
-| Hình học mask | biên sát, không tràn, không khoét lỗ sai | hộp lỏng, ăn bóng, khoét kính |
-| Instance | tách đúng từng vật, đếm đúng | gộp hai xe, hoặc một xe thành hai |
-| Panoptic | phủ kín, không chồng lấn, có lối thoát void | bỏ trống mảng lớn, hai mask tranh một pixel |
-| Đọc điểm | nối IoU thấp với một quy tắc và sửa | chỉ báo số, không sửa |
-| Trung thực | không nộp ground truth, không sửa tệp xuất | có cờ nghi vấn không giải trình |
-
-## Minh chứng tối thiểu
-
-- Ít nhất Easy + Medium đã chấm và có `reports/SCORECARD.md`.
-- `REPORT.md` giải thích một lớp/vật điểm thấp và cách sửa.
-- Không có cờ nghi vấn chưa giải trình.
+Mọi học viên có cùng bài, lớp và chuẩn bằng chứng. Hướng dẫn trực quan giúp người mới thao tác; người xong sớm có thể dùng reference để phân tích và sửa lỗi. Dùng công cụ hỗ trợ không thay thế việc tự kiểm và giải thích một quyết định gán nhãn.

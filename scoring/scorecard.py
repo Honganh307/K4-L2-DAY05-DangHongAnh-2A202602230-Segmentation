@@ -5,10 +5,12 @@ e.g. submissions/easy_semantic.zip, submissions/medium_instance.zip,
 submissions/cp1_holes.zip ...
 
 Usage:  python scoring/scorecard.py [--dir submissions] [--out reports]
+        python scoring/scorecard.py --group tiers --out reports/tiers
 
-Writes reports/SCORECARD.md and reports/scorecard.json. All tasks (3 tiers +
-6 checkpoints) sum to 100 — finish everything for 100%. Any anti-cheat flag is
-surfaced at the top.
+Writes SCORECARD.md and scorecard.json under --out only when every submitted
+task in the selected group can be evaluated against its reference. All tasks
+sum to 100; the three tiers alone sum to 82.
+Review signals are not evidence of misconduct.
 """
 import argparse
 import json
@@ -18,12 +20,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 import lab_utils as L  # noqa: E402
-from scoring.score import load_registry, resolve_task  # noqa: E402
+from scoring.score import load_registry, resolve_task, require_reference, _guard_match  # noqa: E402
 
 
-def score_one(name, sub_path):
-    info, base, classes = resolve_task(load_registry(), name)
+def score_one(name, sub_path, reg=None):
+    reg = reg or load_registry()
+    info, base, classes = resolve_task(reg, name)
     ttype = info["type"]
+    require_reference(base, ttype)
+    _guard_match(reg, name, base, ttype, sub_path)
     gt_dir = base / "groundtruth"
     cap, floor = L.HUMAN_CAP, L.FLOOR
     if ttype == "semantic":
@@ -59,6 +64,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dir", default="submissions")
     ap.add_argument("--out", default="reports")
+    ap.add_argument("--group", choices=("all", "tiers", "checkpoints"), default="all",
+                    help="score only one task group when only its references are available")
     args = ap.parse_args()
     sub_dir = ROOT / args.dir
     reg = load_registry()
@@ -66,37 +73,50 @@ def main():
     # tiers first, then checkpoints — every task counts toward the 100
     order = ([n for n, i in reg.items() if i["_group"] == "tiers"]
              + [n for n, i in reg.items() if i["_group"] == "checkpoints"])
+    if args.group != "all":
+        order = [n for n in order if reg[n]["_group"] == args.group]
+
+    submissions = {name: find_submission(sub_dir, name) for name in order}
+    if not any(submissions.values()):
+        ap.error(f"No task exports found in {sub_dir}; no scorecard was written")
+    for name, sub in submissions.items():
+        if sub:
+            info, base, _ = resolve_task(reg, name)
+            try:
+                require_reference(base, info["type"])
+                _guard_match(reg, name, base, info["type"], sub)
+            except (ValueError, FileNotFoundError) as exc:
+                ap.error(f"Cannot score {name}: {exc}; no scorecard was written")
 
     rows, all_flags = {}, []
     total = 0.0
     for name in order:
-        sub = find_submission(sub_dir, name)
+        sub = submissions[name]
         if not sub:
             rows[name] = {"type": reg[name]["type"], "group": reg[name]["_group"],
                           "points": 0.0, "weight": reg[name].get("weight", 0),
                           "value": None, "flags": [], "missing": True}
             continue
         try:
-            r = score_one(name, sub)
-        except Exception as e:  # noqa: BLE001
-            rows[name] = {"type": reg[name]["type"], "group": reg[name]["_group"],
-                          "error": str(e), "points": 0.0, "weight": reg[name].get("weight", 0)}
-            continue
+            r = score_one(name, sub, reg)
+        except (ValueError, FileNotFoundError, KeyError, OSError) as exc:
+            ap.error(f"Cannot score {name}: {exc}; no scorecard was written")
         rows[name] = r
         total += r["points"]
         for f in r["flags"]:
             all_flags.append(f"[{name}] {f}")
 
     total = round(total, 1)
-    max_total = sum(i.get("weight", 0) for i in reg.values())
-    out = {"total": total, "max": max_total, "cheat_flags": all_flags, "tasks": rows}
+    max_total = sum(reg[name].get("weight", 0) for name in order)
+    out = {"total": total, "max": max_total, "group": args.group,
+           "review_flags": all_flags, "tasks": rows}
     outdir = ROOT / args.out
-    outdir.mkdir(exist_ok=True)
+    outdir.mkdir(parents=True, exist_ok=True)
     (outdir / "scorecard.json").write_text(json.dumps(out, indent=2))
 
     lines = ["# Day-5 Segmentation — Scorecard", ""]
     if all_flags:
-        lines += ["> ⚠️ **ANTI-CHEAT FLAGS — evaluator must review:**"]
+        lines += ["> ⚠️ **Review signals — human interpretation required:**"]
         lines += [f"> - {f}" for f in all_flags] + [""]
     lines += [f"**Total: {total} / {max_total}**", "",
               "| Task | Group | Type | Metric | Points |", "| --- | --- | --- | ---: | ---: |"]
